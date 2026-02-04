@@ -13,6 +13,7 @@ import {
   JiraDocContent,
   ListOptions,
 } from '../types/jira';
+import { RateLimiter } from '../utils/rate-limiter';
 
 export class JiraClient {
   private client: AxiosInstance;
@@ -20,6 +21,7 @@ export class JiraClient {
   private fieldCache: Map<string, JiraFieldMeta> = new Map();
   private sprintFieldId: string | null = null;
   private epicLinkFieldId: string | null = null;
+  private rateLimiter: RateLimiter;
 
   constructor(config: JiraConfig) {
     this.config = config;
@@ -33,6 +35,14 @@ export class JiraClient {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
+    });
+
+    // Initialize rate limiter with configured limits
+    this.rateLimiter = new RateLimiter({
+      creates: config.rateLimits.creates,
+      transitions: config.rateLimits.transitions,
+      comments: config.rateLimits.comments,
+      assigns: config.rateLimits.assigns,
     });
   }
 
@@ -235,6 +245,10 @@ export class JiraClient {
    * Transition an issue to a new status
    */
   async transitionIssue(issueKey: string, transitionId: string): Promise<void> {
+    if (!this.rateLimiter.checkLimit('transitions')) {
+      process.exit(1);
+    }
+
     try {
       await this.client.post(`/issue/${issueKey}/transitions`, {
         transition: { id: transitionId },
@@ -248,6 +262,10 @@ export class JiraClient {
    * Add a comment to an issue
    */
   async addComment(issueKey: string, body: string): Promise<JiraComment> {
+    if (!this.rateLimiter.checkLimit('comments')) {
+      process.exit(1);
+    }
+
     const adfBody: JiraDocContent = {
       type: 'doc',
       version: 1,
@@ -287,6 +305,10 @@ export class JiraClient {
    * Create a new issue
    */
   async createIssue(request: JiraCreateIssueRequest): Promise<JiraCreateIssueResponse> {
+    if (!this.rateLimiter.checkLimit('creates')) {
+      process.exit(1);
+    }
+
     try {
       const response = await this.client.post<JiraCreateIssueResponse>('/issue', request);
       return response.data;
@@ -310,6 +332,10 @@ export class JiraClient {
    * Assign an issue to a user
    */
   async assignIssue(issueKey: string, accountId: string | null): Promise<void> {
+    if (!this.rateLimiter.checkLimit('assigns')) {
+      process.exit(1);
+    }
+
     try {
       await this.client.put(`/issue/${issueKey}/assignee`, {
         accountId,

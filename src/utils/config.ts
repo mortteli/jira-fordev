@@ -60,10 +60,19 @@ export function loadConfig(): JiraConfig {
   // Normalize host URL (remove trailing slash)
   const normalizedHost = host!.replace(/\/+$/, '');
 
+  // Load rate limit configuration with defaults
+  const rateLimits = {
+    creates: parseInt(process.env.RATE_LIMIT_CREATES || '10', 10),
+    transitions: parseInt(process.env.RATE_LIMIT_TRANSITIONS || '20', 10),
+    comments: parseInt(process.env.RATE_LIMIT_COMMENTS || '30', 10),
+    assigns: parseInt(process.env.RATE_LIMIT_ASSIGNS || '20', 10),
+  };
+
   return {
     host: normalizedHost,
     email: email!,
     apiToken: apiToken!,
+    rateLimits,
   };
 }
 

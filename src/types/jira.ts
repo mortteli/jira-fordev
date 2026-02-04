@@ -1,9 +1,17 @@
 // Jira API Types
 
+export interface RateLimitConfig {
+  creates: number;
+  transitions: number;
+  comments: number;
+  assigns: number;
+}
+
 export interface JiraConfig {
   host: string;
   email: string;
   apiToken: string;
+  rateLimits: RateLimitConfig;
 }
 
 export interface JiraUser {
