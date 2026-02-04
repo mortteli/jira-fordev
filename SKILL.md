@@ -214,3 +214,93 @@ If you see authentication errors:
 If an issue is not found:
 1. Verify the project key and issue number
 2. Check you have permission to view the issue
+
+## AI Agent Safety Features
+
+When using this CLI with AI agents (Claude Code, Cursor, Copilot, etc.), safety features are built in to prevent accidental bulk operations.
+
+### Rate Limiting
+
+All write operations (create, status, comment, assign) are rate-limited per hour:
+
+| Operation | Default Limit |
+|-----------|--------------|
+| Creates | 10/hour |
+| Transitions | 20/hour |
+| Comments | 30/hour |
+| Assigns | 20/hour |
+
+Configure limits via environment variables:
+```bash
+JIRA_MAX_CREATES_PER_HOUR=10
+JIRA_MAX_TRANSITIONS_PER_HOUR=20
+JIRA_MAX_COMMENTS_PER_HOUR=30
+JIRA_MAX_ASSIGNS_PER_HOUR=20
+```
+
+### Confirmation Mode
+
+Enable confirmation mode to require explicit `--confirm` flags for write operations:
+
+```bash
+# In .env
+JIRA_REQUIRE_CONFIRMATION=true
+
+# Then commands require --confirm
+jira create -p PROJ -t bug -s "New bug" --confirm
+jira status PROJ-123 Done --confirm
+```
+
+### Dry Run Mode
+
+Preview any write operation without executing it:
+
+```bash
+jira create -p PROJ -t bug -s "Test bug" --dry-run
+# Output: [DRY RUN] Would create Bug in PROJ: "Test bug"
+
+jira status PROJ-123 Done --dry-run
+# Output: [DRY RUN] Would transition PROJ-123 to "Done"
+```
+
+### Safety Command
+
+Check and manage rate limits:
+
+```bash
+# View current rate limit status
+jira safety --status
+
+# View safety configuration
+jira safety --config
+
+# Reset rate limit counters
+jira safety --reset
+```
+
+### Agent Usage Guidelines
+
+When used by AI agents, follow these practices:
+
+1. **Never use YOLO mode** - Always review commands before execution
+2. **Use read-only first** - Start with `list` and `view` commands
+3. **Single operations** - Avoid batch/loop patterns
+4. **Enable confirmation mode** - Set `JIRA_REQUIRE_CONFIRMATION=true`
+5. **Use dry-run** - Preview operations before executing
+6. **Check rate limits** - Run `jira safety --status` periodically
+
+### Recommended .env for Agent Usage
+
+```bash
+# Standard configuration
+JIRA_HOST=https://your-domain.atlassian.net
+JIRA_EMAIL=your-email@example.com
+JIRA_API_TOKEN=your-api-token
+
+# Safety configuration for agent usage
+JIRA_REQUIRE_CONFIRMATION=true
+JIRA_MAX_CREATES_PER_HOUR=5
+JIRA_MAX_TRANSITIONS_PER_HOUR=10
+JIRA_MAX_COMMENTS_PER_HOUR=15
+JIRA_MAX_ASSIGNS_PER_HOUR=10
+```

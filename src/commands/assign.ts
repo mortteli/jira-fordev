@@ -3,13 +3,16 @@ import chalk from 'chalk';
 import { JiraClient } from '../api/jira-client';
 import { loadConfig } from '../utils/config';
 import { formatSuccess, formatError } from '../utils/formatter';
+import { enforceRateLimit, recordOperation, requireConfirmationCheck } from '../utils/safety';
 
 export function createAssignCommand(): Command {
   const command = new Command('assign')
     .description('Assign a Jira issue to a user')
     .argument('<issue-key>', 'The issue key (e.g., PROJ-123)')
     .argument('<user>', 'User email or "me" for yourself, or "none" to unassign')
-    .action(async (issueKey: string, user: string) => {
+    .option('--confirm', 'Confirm the operation (required when JIRA_REQUIRE_CONFIRMATION=true)')
+    .option('--dry-run', 'Preview the operation without making changes')
+    .action(async (issueKey: string, user: string, opts) => {
       const config = loadConfig();
       const client = new JiraClient(config);
 
@@ -42,7 +45,19 @@ export function createAssignCommand(): Command {
           displayName = foundUser.displayName;
         }
 
+        // Safety checks for agent usage
+        enforceRateLimit('assigns');
+
+        const description = `Assign ${normalizedKey} to ${displayName}`;
+        if (!requireConfirmationCheck('assign issue', description, opts.confirm, opts.dryRun)) {
+          return;
+        }
+
         await client.assignIssue(normalizedKey, accountId);
+
+        // Record successful operation for rate limiting
+        recordOperation('assigns');
+
         formatSuccess(`${normalizedKey} assigned to ${chalk.cyan(displayName)}`);
       } catch (error) {
         formatError(`Failed to assign ${normalizedKey}`);

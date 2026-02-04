@@ -7,6 +7,7 @@ import { createCommentCommand } from './commands/comment';
 import { createStatusCommand } from './commands/status';
 import { createCreateCommand } from './commands/create';
 import { createAssignCommand } from './commands/assign';
+import { createSafetyCommand } from './commands/safety';
 
 const program = new Command();
 
@@ -22,6 +23,7 @@ program.addCommand(createCommentCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createCreateCommand());
 program.addCommand(createAssignCommand());
+program.addCommand(createSafetyCommand());
 
 // Parse arguments
 program.parse();

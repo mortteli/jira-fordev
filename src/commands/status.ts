@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import { JiraClient } from '../api/jira-client';
 import { loadConfig } from '../utils/config';
 import { formatTransitions, formatSuccess, formatError, formatStatus } from '../utils/formatter';
+import { enforceRateLimit, recordOperation, requireConfirmationCheck } from '../utils/safety';
 
 export function createStatusCommand(): Command {
   const command = new Command('status')
@@ -10,6 +11,8 @@ export function createStatusCommand(): Command {
     .argument('<issue-key>', 'The issue key (e.g., PROJ-123)')
     .argument('[status]', 'The new status name or transition ID')
     .option('-l, --list', 'List available transitions')
+    .option('--confirm', 'Confirm the operation (required when JIRA_REQUIRE_CONFIRMATION=true)')
+    .option('--dry-run', 'Preview the operation without making changes')
     .action(async (issueKey: string, status: string | undefined, opts) => {
       const config = loadConfig();
       const client = new JiraClient(config);
@@ -51,8 +54,20 @@ export function createStatusCommand(): Command {
           process.exit(1);
         }
 
+        // Safety checks for agent usage
+        enforceRateLimit('transitions');
+
+        const description = `Transition ${normalizedKey} to "${transition.to.name}"`;
+        if (!requireConfirmationCheck('transition issue', description, opts.confirm, opts.dryRun)) {
+          return;
+        }
+
         // Perform the transition
         await client.transitionIssue(normalizedKey, transition.id);
+
+        // Record successful operation for rate limiting
+        recordOperation('transitions');
+
         formatSuccess(`${normalizedKey} transitioned to "${transition.to.name}"`);
       } catch (error) {
         formatError(`Failed to update status for ${normalizedKey}`);

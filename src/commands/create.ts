@@ -4,6 +4,7 @@ import { JiraClient } from '../api/jira-client';
 import { loadConfig } from '../utils/config';
 import { formatSuccess, formatError } from '../utils/formatter';
 import { JiraCreateIssueRequest } from '../types/jira';
+import { enforceRateLimit, recordOperation, requireConfirmationCheck } from '../utils/safety';
 
 export function createCreateCommand(): Command {
   const command = new Command('create')
@@ -16,7 +17,16 @@ export function createCreateCommand(): Command {
     .option('--priority <name>', 'Priority (Highest, High, Medium, Low, Lowest)')
     .option('--labels <labels>', 'Comma-separated labels')
     .option('--epic <key>', 'Parent epic key')
+    .option('--confirm', 'Confirm the operation (required when JIRA_REQUIRE_CONFIRMATION=true)')
+    .option('--dry-run', 'Preview the operation without making changes')
     .action(async (opts) => {
+      // Safety checks for agent usage
+      enforceRateLimit('creates');
+
+      const description = `Create ${normalizeIssueType(opts.type)} in ${opts.project.toUpperCase()}: "${opts.summary}"`;
+      if (!requireConfirmationCheck('create issue', description, opts.confirm, opts.dryRun)) {
+        return;
+      }
       const config = loadConfig();
       const client = new JiraClient(config);
 
@@ -73,6 +83,9 @@ export function createCreateCommand(): Command {
 
         // Create the issue
         const result = await client.createIssue(request);
+
+        // Record successful operation for rate limiting
+        recordOperation('creates');
 
         formatSuccess(`Created issue: ${chalk.yellow(result.key)}`);
         console.log(chalk.gray(`  ${config.host}/browse/${result.key}\n`));
