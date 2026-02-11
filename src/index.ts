@@ -7,6 +7,8 @@ import { createCommentCommand } from './commands/comment';
 import { createStatusCommand } from './commands/status';
 import { createCreateCommand } from './commands/create';
 import { createAssignCommand } from './commands/assign';
+import { createSprintCommand } from './commands/sprint';
+import { createMoveCommand } from './commands/move';
 
 const program = new Command();
 
@@ -22,6 +24,8 @@ program.addCommand(createCommentCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createCreateCommand());
 program.addCommand(createAssignCommand());
+program.addCommand(createSprintCommand());
+program.addCommand(createMoveCommand());
 
 // Parse arguments
 program.parse();

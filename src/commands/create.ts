@@ -13,6 +13,8 @@ export function createCreateCommand(): Command {
     .requiredOption('-s, --summary <text>', 'Issue summary/title (required)')
     .option('-d, --description <text>', 'Issue description')
     .option('-a, --assignee <email>', 'Assignee email address')
+    .option('--sprint <name>', 'Sprint name (moves issue to sprint after creation)')
+    .option('--board <id>', 'Board ID (required when project has multiple boards)')
     .option('--priority <name>', 'Priority (Highest, High, Medium, Low, Lowest)')
     .option('--labels <labels>', 'Comma-separated labels')
     .option('--epic <key>', 'Parent epic key')
@@ -74,7 +76,20 @@ export function createCreateCommand(): Command {
         // Create the issue
         const result = await client.createIssue(request);
 
-        formatSuccess(`Created issue: ${chalk.yellow(result.key)}`);
+        // Move to sprint if specified
+        if (opts.sprint) {
+          const boardId = opts.board ? parseInt(opts.board, 10) : undefined;
+          const sprint = await client.findSprintByName(opts.project.toUpperCase(), opts.sprint, boardId);
+          if (sprint) {
+            await client.moveIssuesToSprint(sprint.id, [result.key]);
+            formatSuccess(`Created issue: ${chalk.yellow(result.key)} (in ${sprint.name})`);
+          } else {
+            console.log(chalk.yellow(`Warning: Sprint "${opts.sprint}" not found, issue created in backlog`));
+            formatSuccess(`Created issue: ${chalk.yellow(result.key)}`);
+          }
+        } else {
+          formatSuccess(`Created issue: ${chalk.yellow(result.key)}`);
+        }
         console.log(chalk.gray(`  ${config.host}/browse/${result.key}\n`));
       } catch (error) {
         formatError('Failed to create issue');

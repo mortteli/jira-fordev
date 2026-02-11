@@ -11,6 +11,7 @@ import {
   JiraUser,
   JiraFieldMeta,
   JiraDocContent,
+  JiraSprint,
   ListOptions,
 } from '../types/jira';
 
@@ -21,14 +22,25 @@ export class JiraClient {
   private sprintFieldId: string | null = null;
   private epicLinkFieldId: string | null = null;
 
+  private agileClient: AxiosInstance;
+
   constructor(config: JiraConfig) {
     this.config = config;
+    const auth = {
+      username: config.email,
+      password: config.apiToken,
+    };
     this.client = axios.create({
       baseURL: `${config.host}/rest/api/3`,
-      auth: {
-        username: config.email,
-        password: config.apiToken,
+      auth,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
+    });
+    this.agileClient = axios.create({
+      baseURL: `${config.host}/rest/agile/1.0`,
+      auth,
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
@@ -365,6 +377,93 @@ export class JiraClient {
    */
   getEpicLinkFieldId(): string | null {
     return this.epicLinkFieldId;
+  }
+
+  /**
+   * Get boards (optionally filtered by project)
+   */
+  async getBoards(projectKey?: string): Promise<{ id: number; name: string; type: string }[]> {
+    try {
+      const params = projectKey ? { projectKeyOrId: projectKey } : {};
+      const response = await this.agileClient.get<{
+        values: { id: number; name: string; type: string }[];
+      }>('/board', { params });
+      return response.data.values || [];
+    } catch (error) {
+      this.handleError(error as AxiosError);
+    }
+  }
+
+  /**
+   * Get sprints for a board (issues can only be moved to active or future sprints)
+   */
+  async getSprints(boardId: number): Promise<JiraSprint[]> {
+    try {
+      const response = await this.agileClient.get<{ values: JiraSprint[] }>(
+        `/board/${boardId}/sprint`
+      );
+      const sprints = response.data.values || [];
+      // Filter to active/future - only these can receive issues
+      return sprints.filter((s) => s.state === 'active' || s.state === 'future');
+    } catch (error) {
+      this.handleError(error as AxiosError);
+    }
+  }
+
+  /**
+   * Find sprint by name (searches active and future sprints)
+   */
+  async findSprintByName(projectKey: string, sprintName: string, boardId?: number): Promise<JiraSprint | null> {
+    let boardIds: number[];
+    if (boardId) {
+      boardIds = [boardId];
+    } else {
+      const boards = await this.getBoards(projectKey);
+      boardIds = boards.map((b) => b.id);
+    }
+    const nameLower = sprintName.toLowerCase().trim();
+    for (const bid of boardIds) {
+      const sprints = await this.getSprints(bid);
+      const match = sprints.find((s) => s.name.toLowerCase().trim() === nameLower);
+      if (match) return match;
+    }
+    return null;
+  }
+
+  /**
+   * Move issues to a sprint (uses Agile API)
+   */
+  async moveIssuesToSprint(sprintId: number, issueKeys: string[]): Promise<void> {
+    try {
+      await this.agileClient.post(`/sprint/${sprintId}/issue`, {
+        issues: issueKeys,
+      });
+    } catch (error) {
+      this.handleError(error as AxiosError);
+    }
+  }
+
+  /**
+   * Create a new sprint on a board
+   */
+  async createSprint(
+    boardId: number,
+    name: string,
+    options?: { goal?: string; startDate?: string; endDate?: string }
+  ): Promise<JiraSprint> {
+    try {
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        originBoardId: boardId,
+      };
+      if (options?.goal) body.goal = options.goal;
+      if (options?.startDate) body.startDate = options.startDate;
+      if (options?.endDate) body.endDate = options.endDate;
+      const response = await this.agileClient.post<JiraSprint>('/sprint', body);
+      return response.data;
+    } catch (error) {
+      this.handleError(error as AxiosError);
+    }
   }
 
   /**

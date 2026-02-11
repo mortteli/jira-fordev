@@ -4,12 +4,14 @@ A command-line interface for Jira Cloud, designed for developers. Includes a Cur
 
 ## Features
 
-- List and search issues with flexible filters
-- View issue details, comments, and linked issues
+- List and search issues with flexible filters (project, status, assignee, sprint, epic, type, JQL)
+- View issue details including comments, linked issues, and subtasks
 - Add comments to tickets
 - Update issue status with workflow transitions
-- Create new issues (bugs, tasks, stories, epics)
+- Create new issues (bugs, tasks, stories, epics) with optional sprint placement
 - Assign issues to users
+- Create sprints on Jira boards
+- Move issues to sprints in bulk
 - Cursor AI skill for natural language interaction
 
 ## Installation
@@ -75,6 +77,8 @@ JIRA_API_TOKEN=your-api-token
 
 **Important:** Add `.env` to your `.gitignore` to keep credentials secure.
 
+The CLI automatically searches for the `.env` file in the current directory and up to 10 parent directories, so you only need one `.env` file at your workspace root.
+
 ### 3. (Optional) Set Up Cursor AI Skill
 
 To enable Cursor AI to use the Jira CLI, copy the skill file:
@@ -94,7 +98,7 @@ Now Cursor AI can execute Jira commands when you ask it to manage tickets.
 ### List Issues
 
 ```bash
-# List recent issues
+# List recent issues (default: last 30 days, 20 results)
 jira list
 
 # Filter by project
@@ -115,10 +119,10 @@ jira list --sprint "Sprint 5"
 # Filter by epic
 jira list --epic PROJ-100
 
-# Custom JQL query
+# Custom JQL query (overrides other filters)
 jira list --jql "project = PROJ AND priority = High"
 
-# Combine filters
+# Combine filters with custom limit
 jira list -p PROJ -a me -s "In Progress" -t bug -l 50
 ```
 
@@ -147,9 +151,12 @@ jira status PROJ-123
 # List available transitions
 jira status PROJ-123 --list
 
-# Transition to new status
+# Transition to new status (by name)
 jira status PROJ-123 "In Progress"
 jira status PROJ-123 "Done"
+
+# Transition by ID (shown in --list output)
+jira status PROJ-123 31
 ```
 
 ### Create Issue
@@ -161,13 +168,23 @@ jira create -p PROJ -t bug -s "Login button broken"
 # Create a task with description
 jira create -p PROJ -t task -s "Update docs" -d "Add API examples"
 
+# Create and assign to yourself
+jira create -p PROJ -t story -s "User profile" -a me
+
+# Create and place in a sprint
+jira create -p PROJ -t task -s "API refactor" --sprint "Sprint 1" -a me
+
+# Specify board when project has multiple boards
+jira create -p PROJ -t task -s "Backend fix" --sprint "Sprint 2" --board 84
+
 # Create with all options
-jira create -p PROJ -t story -s "User profile" \
-  -d "Implement user profile page" \
-  -a me \
+jira create -p PROJ -t bug -s "Critical bug" \
+  -d "Detailed description" \
+  -a "dev@example.com" \
   --priority High \
   --labels "frontend,urgent" \
-  --epic PROJ-50
+  --epic PROJ-50 \
+  --sprint "Sprint 3"
 ```
 
 ### Assign Issue
@@ -183,18 +200,46 @@ jira assign PROJ-123 "developer@example.com"
 jira assign PROJ-123 none
 ```
 
+### Create Sprint
+
+```bash
+# Create a new sprint for a project
+jira sprint create "Sprint 7" -p PROJ
+
+# Create with a sprint goal
+jira sprint create "Sprint 7" -p PROJ -g "Complete auth module"
+
+# Specify board ID (when project has multiple boards)
+jira sprint create "Sprint 7" -p PROJ -b 84
+```
+
+### Move Issues to Sprint
+
+```bash
+# Move a single issue to a sprint
+jira move PROJ-101 -s "Sprint 7" -p PROJ
+
+# Move multiple issues at once
+jira move PROJ-101 PROJ-102 PROJ-103 -s "Sprint 7" -p PROJ
+
+# Specify board ID (when project has multiple boards)
+jira move PROJ-101 PROJ-102 -s "Sprint 7" -p PROJ -b 84
+```
+
 ## CLI Reference
 
 ```
 jira <command> [options]
 
 Commands:
-  list [options]              List and search issues
-  view <issue-key>            View issue details
-  comment <issue-key> <text>  Add a comment
-  status <issue-key> [status] View or update status
-  create [options]            Create a new issue
-  assign <issue-key> <user>   Assign issue to user
+  list [options]                    List and search issues
+  view <issue-key>                  View issue details
+  comment <issue-key> <text>        Add a comment
+  status <issue-key> [status]       View or update status
+  create [options]                  Create a new issue
+  assign <issue-key> <user>         Assign issue to user
+  sprint create <name> [options]    Create a new sprint
+  move <issues...> [options]        Move issues to a sprint
 
 Options:
   -V, --version  Show version
@@ -207,7 +252,7 @@ List Options:
   --sprint <name>         Filter by sprint name
   --epic <key>            Filter by epic key
   -t, --type <type>       Filter by type (bug, task, story)
-  --jql <query>           Custom JQL query
+  --jql <query>           Custom JQL query (overrides other filters)
   -l, --limit <n>         Max results (default: 20)
 
 View Options:
@@ -221,11 +266,37 @@ Create Options:
   -t, --type <type>       Issue type (required)
   -s, --summary <text>    Summary (required)
   -d, --description <text> Description
-  -a, --assignee <email>  Assignee email
-  --priority <name>       Priority level
+  -a, --assignee <email>  Assignee email or "me"
+  --priority <name>       Priority (Highest, High, Medium, Low, Lowest)
   --labels <labels>       Comma-separated labels
   --epic <key>            Parent epic key
+  --sprint <name>         Sprint name (moves issue to sprint after creation)
+  --board <id>            Board ID (required when project has multiple boards)
+
+Sprint Create Options:
+  -p, --project <key>     Project key (required)
+  -b, --board <id>        Board ID (optional if project has single board)
+  -g, --goal <text>       Sprint goal
+
+Move Options:
+  -s, --sprint <name>     Sprint name (required)
+  -p, --project <key>     Project key (required)
+  -b, --board <id>        Board ID (optional if project has single board)
 ```
+
+## Issue Types
+
+The CLI supports these common issue types:
+
+| Type       | Input value        |
+|------------|--------------------|
+| Bug        | `bug`              |
+| Task       | `task`             |
+| Story      | `story`            |
+| Epic       | `epic`             |
+| Sub-task   | `subtask`, `sub-task` |
+
+Custom issue types can be used by specifying their exact Jira name.
 
 ## Examples
 
@@ -258,6 +329,33 @@ jira status PROJ-456 "In Progress"
 jira list -a me -s "In Progress"
 ```
 
+### Plan a Sprint
+
+```bash
+# Create a new sprint
+jira sprint create "Sprint 8" -p PROJ -g "API v2 release"
+
+# Move issues into the sprint
+jira move PROJ-200 PROJ-201 PROJ-202 -s "Sprint 8" -p PROJ
+```
+
+### Create a Ticket Directly in a Sprint
+
+```bash
+jira create -p PROJ -t task -s "Write integration tests" \
+  -a me --sprint "Sprint 8"
+```
+
+### Review Sprint Tickets
+
+```bash
+# List all tickets in a sprint
+jira list --sprint "Sprint 8"
+
+# List unfinished sprint tickets assigned to you
+jira list --sprint "Sprint 8" -a me --jql "status != Done"
+```
+
 ## Troubleshooting
 
 ### Authentication Failed
@@ -275,6 +373,21 @@ jira list -a me -s "In Progress"
 
 - Use `jira status PROJ-123 --list` to see valid transitions
 - Transitions depend on your Jira workflow configuration
+
+### Sprint Not Found
+
+- The `move` and `create --sprint` commands only match **active** or **future** sprints
+- Sprint name matching is case-insensitive
+- If the project has multiple boards, specify the board with `--board <id>`
+
+## Tech Stack
+
+- **Runtime:** Node.js >= 18
+- **Language:** TypeScript (ES2022)
+- **HTTP Client:** Axios
+- **CLI Framework:** Commander.js
+- **Output Formatting:** Chalk, cli-table3
+- **Config:** dotenv
 
 ## Contributing
 

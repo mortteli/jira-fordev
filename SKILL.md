@@ -98,8 +98,17 @@ jira create -p PROJ -t bug -s "Login button not working"
 # Create a task with description
 jira create -p PROJ -t task -s "Update documentation" -d "Add API examples to the README"
 
+# Create a task in a sprint (creates then moves to sprint)
+jira create -p PROJ -t task -s "API refactor" --sprint "Sprint 1" -a me
+
 # Create a story assigned to yourself
 jira create -p PROJ -t story -s "User profile page" -a me
+
+# Create a task and add to a sprint (moves to sprint after creation)
+jira create -p PROJ -t task -s "Update documentation" -d "Add API examples" --sprint "Sprint 1"
+
+# Create with board ID (when project has multiple boards)
+jira create -p PROJ -t task -s "Backend refactor" --sprint "Sprint 2" --board 84
 
 # Create with all options
 jira create -p PROJ -t bug -s "Critical bug" -d "Detailed description" -a "dev@example.com" --priority High --labels "urgent,frontend" --epic PROJ-50
